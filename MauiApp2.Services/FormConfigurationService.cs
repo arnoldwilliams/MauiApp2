@@ -1,4 +1,6 @@
 ﻿using MauiApp2.Dto;
+using MauiApp2.Interfaces;
+using Microsoft.Maui.ApplicationModel;
 using System;
 using System.Collections.Generic;
 using System.ComponentModel.Design;
