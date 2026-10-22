@@ -66,6 +66,13 @@
 	</ItemGroup>
 
 	<ItemGroup>
+		<ProjectReference Include="..\MauiApp2.Database\MauiApp2.Database.csproj" />
+		<ProjectReference Include="..\MauiApp2.Dto\MauiApp2.Dto.csproj" />
+		<ProjectReference Include="..\MauiApp2.Interfaces\MauiApp2.Interfaces.csproj" />
+		<ProjectReference Include="..\MauiApp2.Services\MauiApp2.Services.csproj" />
+	</ItemGroup>
+
+	<ItemGroup>
 		<PackageReference Include="Microsoft.Maui.Controls" Version="$(MauiVersion)" />
 		<PackageReference Include="Microsoft.Extensions.Logging.Debug" Version="10.0.0" />
 		<PackageReference Include="sqlite-net-pcl" Version="1.11.285" />

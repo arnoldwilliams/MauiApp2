@@ -1,45 +1,87 @@
-﻿using System;
-using System.Collections;
-using System.Collections.Generic;
-using System.Text;
-using MauiApp2.Database.Models;
+﻿using MauiApp2.Database.Models;
+using MauiApp2.Dto;
 
 namespace MauiApp2.Interfaces
 {
+    /// <summary>
+    /// Contract for the local SQLite database service.
+    /// Each table is exposed through explicit, strongly typed members instead of
+    /// generic or runtime type dispatched ones.
+    /// </summary>
     public interface IDatabaseService
     {
-        public Task Init();
+        Task Init();
 
-        public bool IsTableExists(string tableName);
+        bool IsTableExists(string tableName);
 
-        public Task<int> Add(object model);
+        Task<int> Add(object model);
 
-        public Task<int> Update(object model);
+        Task<int> AddOrReplace(object model);
 
-        public Task<int> Delete(object model);
+        Task<int> Update(object model);
 
-        public Task<int> DeleteAll(object model);
+        Task<int> Delete(object model);
 
-        public Task<int> DeleteAllAsync<T>();
+        Task<int> DeleteAllMenuModels();
 
-        public Task<int> GetCount(object model);
+        Task<int> DeleteAllCases();
 
-        public Task<IEnumerable> GetAll(object model);
+        Task<int> DeleteAllCaseSummaries();
 
-        public Task<List<T>?> GetAllOld<T>() where T : new();
+        Task<int> DeleteAllFormConfigurations();
 
-        // public Task<List<T>?> Get<T>();
-        public Task<List<CaseSummaryModel>> GetDraftCases();
+        Task<int> DeleteAllBannedExtensions();
 
-        public Task<object> GetById<T>(int id);
+        Task<int> DeleteAllLogs();
 
-        public Task<object> GetById(object model);
+        Task<int> DeleteAllBaseMaps();
 
-        public Task<object> GetByFormId(object model);
+        Task<int> GetMenuModelCount();
 
-        public object GetConfigByFormId(object model);
-        public Task<int> AddOrReplace(object model);
+        Task<int> GetCaseCount();
 
+        Task<int> GetCaseSummaryCount();
+
+        Task<int> GetFormConfigurationCount();
+
+        Task<int> GetBannedExtensionCount();
+
+        Task<int> GetLogCount();
+
+        Task<int> GetBaseMapCount();
+
+        Task<List<MenuModel>?> GetAllMenuModels();
+
+        Task<List<CaseModel>?> GetAllCases();
+
+        Task<List<CaseSummaryModel>?> GetAllCaseSummaries();
+
+        Task<List<FormConfigurationModel>?> GetAllFormConfigurations();
+
+        Task<List<BannedExtensionListModel>?> GetAllBannedExtensions();
+
+        Task<List<LogModel>?> GetAllLogs();
+
+        Task<List<BaseMapModel>?> GetAllBaseMaps();
+
+        Task<List<CaseSummaryModel>> GetDraftCases();
+
+        Task<MenuModel?> GetMenuModelById(string menuId);
+
+        Task<CaseModel?> GetCaseById(int id);
+
+        Task<CaseSummaryModel?> GetCaseSummaryById(int id);
+
+        Task<FormConfigurationModel?> GetFormConfigurationById(int id);
+
+        Task<BannedExtensionListModel?> GetBannedExtensionById(int id);
+
+        Task<LogModel?> GetLogById(int id);
+
+        Task<BaseMapModel?> GetBaseMapById(int id);
+
+        Task<FormConfiguration?> GetByFormId(FormConfigurationModel model);
+
+        FormConfiguration? GetConfigByFormId(FormConfigurationModel model);
     }
-
 }
