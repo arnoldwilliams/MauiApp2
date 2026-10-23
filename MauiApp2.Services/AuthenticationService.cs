@@ -45,7 +45,7 @@ namespace MauiApp2.Services
             _logger = logger;
         }
 
-        private IEnumerable<string> Scopes => new List<string> { $"{_configurationService.ConfigurationValues.ApimScope} offline_access" };
+        private IEnumerable<string> Scopes => new List<string> { $"{_configurationService?.ConfigurationValues?.ApimScope} offline_access" };
 
         private IPublicClientApplication PCA
         {
@@ -53,11 +53,17 @@ namespace MauiApp2.Services
             {
                 if (_pca == null)
                 {
-                    if (_preferencesService.GetPreference("AppInitialized", string.Empty) == "Initialized")
+                    if (_preferencesService?.GetPreference("AppInitialized", string.Empty) == "Initialized")
                     {
-                        _pca = PublicClientApplicationBuilder.Create(_configurationService.ConfigurationValues.ClientID)
-                            .WithB2CAuthority(_configurationService.ConfigurationValues.AuthoritySignUpSignIn)
-                            .WithRedirectUri($"msal{_configurationService.ConfigurationValues.ClientID}://auth")
+                        var config = _configurationService?.ConfigurationValues;
+                        if (config is null || string.IsNullOrWhiteSpace(config.ClientID))
+                        {
+                            return null;
+                        }
+
+                        _pca = PublicClientApplicationBuilder.Create(config.ClientID)
+                            .WithB2CAuthority(config.AuthoritySignUpSignIn)
+                            .WithRedirectUri($"msal{config.ClientID}://auth")
                             .WithIosKeychainSecurityGroup("com.microsoft.adalcache")
                             .Build();
                     }
@@ -72,10 +78,16 @@ namespace MauiApp2.Services
         {
             try
             {
-                // Get Account Policy like GMail, Facebook
-                IEnumerable<IAccount> accounts = await PCA.GetAccountsAsync();
+                var pca = PCA;
+                if (pca is null)
+                {
+                    return null;
+                }
 
-                AuthenticationResult ar = await PCA.AcquireTokenSilent(Scopes, accounts.FirstOrDefault())
+                // Get Account Policy like GMail, Facebook
+                IEnumerable<IAccount> accounts = await pca.GetAccountsAsync();
+
+                AuthenticationResult ar = await pca.AcquireTokenSilent(Scopes, accounts.FirstOrDefault())
                     .WithB2CAuthority(_configurationService.ConfigurationValues.AuthoritySignUpSignIn)
                     .WithForceRefresh(CommonPlatformService.InitialPageLoad)
                     .ExecuteAsync();
@@ -88,11 +100,11 @@ namespace MauiApp2.Services
                 // Token is expired and user must login again
                 return await B2CLoginAsync();
             }
-            catch (MsalException ex) when (ex.Message.Contains("AADB2C90091") || ex.Message.Contains("AADB2C90273"))
+            catch (MsalException ex) when (ex?.Message?.Contains("AADB2C90091") == true || ex?.Message?.Contains("AADB2C90273") == true)
             {
                 return null;
             }
-            catch (MsalException ex) when (ex.Message.Contains("AADB2C90118"))
+            catch (MsalException ex) when (ex?.Message?.Contains("AADB2C90118") == true)
             {
                 AuthenticationResult ar = await ForgetPasswordAsync();
                 return ar;
@@ -106,7 +118,7 @@ namespace MauiApp2.Services
                 LoggingService<AuthenticationService>.LogError(ex);
                 throw new AuthenticationException(ex.ToString());
             }
-            catch (Exception ex) when (ex.Message.Contains("AADB2C90118"))
+            catch (Exception ex) when (ex?.Message?.Contains("AADB2C90118") == true)
             {
                 // forgot password clicked
                 AuthenticationResult ar = await ForgetPasswordAsync();
@@ -124,9 +136,15 @@ namespace MauiApp2.Services
         {
             try
             {
-                IEnumerable<IAccount> accounts = await PCA.GetAccountsAsync();
+                var pca = PCA;
+                if (pca is null)
+                {
+                    return null;
+                }
 
-                AuthenticationResult ar = await PCA.AcquireTokenSilent(Scopes, accounts.FirstOrDefault())
+                IEnumerable<IAccount> accounts = await pca.GetAccountsAsync();
+
+                AuthenticationResult ar = await pca.AcquireTokenSilent(Scopes, accounts.FirstOrDefault())
                     .WithB2CAuthority(_configurationService.ConfigurationValues.AuthorityEditProfile)
                     .WithForceRefresh(_forceRefresh)
                     .ExecuteAsync();
@@ -140,7 +158,7 @@ namespace MauiApp2.Services
             {
                 return await EditProfileAsync(emailAddress);
             }
-            catch (MsalException ex) when (ex.Message.Contains("AADB2C90091") || ex.Message.Contains("AADB2C90273"))
+            catch (MsalException ex) when (ex?.Message?.Contains("AADB2C90091") == true || ex?.Message?.Contains("AADB2C90273") == true)
             {
                 return null;
             }
@@ -166,6 +184,12 @@ namespace MauiApp2.Services
             {
                 var apimAuthResult = await B2CLoginSilentAsync();
 
+                if (apimAuthResult is null)
+                {
+                    AuthenticationStatusHelper.IsDeviceUserLoggedOn = false;
+                    return false;
+                }
+
                 await _secureStorageService.SaveAccessToken(apimAuthResult.AccessToken).ConfigureAwait(false);
                 await _secureStorageService.SaveIdToken(apimAuthResult.IdToken).ConfigureAwait(false);
 
@@ -187,13 +211,23 @@ namespace MauiApp2.Services
         {
             try
             {
-                // Get Account Policy like GMail, Facebook
-                IEnumerable<IAccount> accounts = await PCA.GetAccountsAsync();
-
-                while (accounts.Any())
+                var pca = PCA;
+                if (pca is not null)
                 {
-                    await PCA.RemoveAsync(accounts.FirstOrDefault());
-                    accounts = await PCA.GetAccountsAsync();
+                    // Get Account Policy like GMail, Facebook
+                    IEnumerable<IAccount> accounts = await pca.GetAccountsAsync();
+
+                    while (accounts.Any())
+                    {
+                        var account = accounts.FirstOrDefault();
+                        if (account is null)
+                        {
+                            break;
+                        }
+
+                        await pca.RemoveAsync(account);
+                        accounts = await pca.GetAccountsAsync();
+                    }
                 }
 
                 //Attempt to send any offline cases before they are wiped
@@ -277,13 +311,13 @@ namespace MauiApp2.Services
 
                 return true;
             }
-            catch (MsalException ex) when (ex.Message.Contains("AADB2C90091"))
+            catch (MsalException ex) when (ex?.Message?.Contains("AADB2C90091") == true)
             {
                 //AADB2C90091 - User cancellation. User canceled the operation
                 LoggingService<AuthenticationService>.LogError(ex);
                 return false;
             }
-            catch (MsalException ex) when (ex.Message.Contains("AADB2C90273"))
+            catch (MsalException ex) when (ex?.Message?.Contains("AADB2C90273") == true)
             {
                 //AADB2C90273 generic in valid response
                 LoggingService<AuthenticationService>.LogError(ex);
@@ -305,17 +339,23 @@ namespace MauiApp2.Services
         {
             try
             {
-                AuthenticationResult apimAuthResult = await PCA.AcquireTokenInteractive(Scopes)
+                var pca = PCA;
+                if (pca is null)
+                {
+                    return false;
+                }
+
+                AuthenticationResult apimAuthResult = await pca.AcquireTokenInteractive(Scopes)
                     .WithB2CAuthority(_configurationService.ConfigurationValues.AuthorityDeleteAccount)
                     .WithUseEmbeddedWebView(_useEmbeddedWindow)
-                    .WithParentActivityOrWindow(_commonPlatformService.UIWindow)
+                    .WithParentActivityOrWindow(_commonPlatformService?.UIWindow)
                     .ExecuteAsync();
 
                 AuthenticationStatusHelper.IsDeviceUserLoggedOn = false;
 
                 return true;
             }
-            catch (MsalException ex) when (ex.Message.Contains("AADB2C90091") || ex.Message.Contains("AADB2C90273"))
+            catch (MsalException ex) when (ex?.Message?.Contains("AADB2C90091") == true || ex?.Message?.Contains("AADB2C90273") == true)
             {
                 LoggingService<AuthenticationService>.LogError(ex);
                 return false;
@@ -381,7 +421,13 @@ namespace MauiApp2.Services
             // Parse as JSON object and get the exp field value, which is the expiration date as a
             // JavaScript primitive date.
             var jsonObj = JObject.Parse(jsonString);
-            var exp = Convert.ToDouble(jsonObj["exp"].ToString());
+            var expToken = jsonObj["exp"];
+            if (expToken is null || expToken.Type == JTokenType.Null)
+            {
+                throw new InvalidDataException("The token does not contain an 'exp' claim.");
+            }
+
+            var exp = Convert.ToDouble(expToken.ToString());
 
             // Calculate the expiration by adding the exp value (in seconds) to the base date of 1/1/1970.
             var minTime = new DateTime(1970, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc);
@@ -395,25 +441,32 @@ namespace MauiApp2.Services
         {
             try
             {
-                AuthenticationResult ar = await PCA.AcquireTokenInteractive(Scopes)
+                var pca = PCA;
+                if (pca is null)
+                {
+                    return null;
+                }
+
+                AuthenticationResult ar = await pca.AcquireTokenInteractive(Scopes)
                     .WithB2CAuthority(_configurationService.ConfigurationValues.AuthoritySignUpSignIn)
                     .WithUseEmbeddedWebView(_useEmbeddedWindow)
-                    .WithParentActivityOrWindow(_commonPlatformService.UIWindow)
+                    .WithParentActivityOrWindow(_commonPlatformService?.UIWindow)
                     .ExecuteAsync();
 
                 return ar;
             }
-            catch (MsalUiRequiredException)
+            catch (MsalUiRequiredException ex)
             {
-                // Token is expired and user must login again
-                return await B2CLoginAsync();
+                // Interactive login already required; retrying would recurse indefinitely.
+                LoggingService<AuthenticationService>.LogError(ex);
+                throw new AuthenticationException(ex.Message);
             }
-            catch (MsalException ex) when (ex.Message.Contains("AADB2C90118"))
+            catch (MsalException ex) when (ex?.Message?.Contains("AADB2C90118") == true)
             {
                 AuthenticationResult ar = await ForgetPasswordAsync();
                 return ar;
             }
-            catch (MsalException ex) when (ex.Message.Contains("AADB2C90091") || ex.Message.Contains("AADB2C90273"))
+            catch (MsalException ex) when (ex?.Message?.Contains("AADB2C90091") == true || ex?.Message?.Contains("AADB2C90273") == true)
             {
                 return null;
             }
@@ -426,7 +479,7 @@ namespace MauiApp2.Services
                 LoggingService<AuthenticationService>.LogError(ex);
                 throw new AuthenticationException(ex.ToString());
             }
-            catch (Exception ex) when (ex.Message.Contains("AADB2C90118"))
+            catch (Exception ex) when (ex?.Message?.Contains("AADB2C90118") == true)
             {
                 // forgot password clicked
                 AuthenticationResult ar = await ForgetPasswordAsync();
@@ -443,14 +496,20 @@ namespace MauiApp2.Services
         {
             try
             {
-                IEnumerable<IAccount> accounts = await PCA.GetAccountsAsync().ConfigureAwait(false);
+                var pca = PCA;
+                if (pca is null)
+                {
+                    return default;
+                }
 
-                AuthenticationResult apimAuthResult = await PCA.AcquireTokenInteractive(Scopes)
+                IEnumerable<IAccount> accounts = await pca.GetAccountsAsync().ConfigureAwait(false);
+
+                AuthenticationResult apimAuthResult = await pca.AcquireTokenInteractive(Scopes)
                     .WithPrompt(Prompt.NoPrompt)
                     .WithAccount(accounts.FirstOrDefault())
                     .WithB2CAuthority(_configurationService.ConfigurationValues.AuthorityEditProfile)
                     .WithUseEmbeddedWebView(_useEmbeddedWindow)
-                    .WithParentActivityOrWindow(_commonPlatformService.UIWindow)
+                    .WithParentActivityOrWindow(_commonPlatformService?.UIWindow)
                     .WithLoginHint(emailAddress)
                     .ExecuteAsync();
 
@@ -465,7 +524,7 @@ namespace MauiApp2.Services
 
                 return apimAuthResult;
             }
-            catch (MsalException ex) when (ex.Message.Contains("AADB2C90091") || ex.Message.Contains("AADB2C90273"))
+            catch (MsalException ex) when (ex?.Message?.Contains("AADB2C90091") == true || ex?.Message?.Contains("AADB2C90273") == true)
             {
                 LoggingService<AuthenticationService>.LogError(ex);
                 return default;
@@ -483,6 +542,11 @@ namespace MauiApp2.Services
 
         private string Base64UrlDecode(string encodedString)
         {
+            if (encodedString is null)
+            {
+                return null;
+            }
+
             encodedString = encodedString.Replace('-', '+').Replace('_', '/');
             encodedString = encodedString.PadRight(encodedString.Length + ((4 - (encodedString.Length % 4)) % 4), '=');
             var byteArray = Convert.FromBase64String(encodedString);
@@ -494,10 +558,16 @@ namespace MauiApp2.Services
         {
             try
             {
-                AuthenticationResult ar = await PCA.AcquireTokenInteractive(Scopes)
+                var pca = PCA;
+                if (pca is null)
+                {
+                    return default;
+                }
+
+                AuthenticationResult ar = await pca.AcquireTokenInteractive(Scopes)
                     .WithB2CAuthority(_configurationService.ConfigurationValues.AuthorityPasswordReset)
                     .WithUseEmbeddedWebView(_useEmbeddedWindow)
-                    .WithParentActivityOrWindow(_commonPlatformService.UIWindow)
+                    .WithParentActivityOrWindow(_commonPlatformService?.UIWindow)
                     .ExecuteAsync();
 
                 return ar;
@@ -509,7 +579,7 @@ namespace MauiApp2.Services
             catch (MsalException ex)
             {
                 // change password canceled from Cancel button
-                if (ex.Message.Contains("AADB2C90091"))
+                if (ex?.Message?.Contains("AADB2C90091") == true)
                     return null;
                 else
                 {
@@ -534,9 +604,20 @@ namespace MauiApp2.Services
         {
             try
             {
+                if (accounts is null || string.IsNullOrEmpty(policy))
+                {
+                    return null;
+                }
+
                 foreach (var account in accounts)
                 {
-                    string userIdentifier = account.HomeAccountId.ObjectId.Split('.')[0];
+                    var objectId = account?.HomeAccountId?.ObjectId;
+                    if (string.IsNullOrEmpty(objectId))
+                    {
+                        continue;
+                    }
+
+                    string userIdentifier = objectId.Split('.')[0];
                     if (userIdentifier.EndsWith(policy.ToLower(), StringComparison.InvariantCultureIgnoreCase)) return account;
                 }
             }
@@ -567,8 +648,13 @@ namespace MauiApp2.Services
                 }
 
                 var idToken = new JwtSecurityToken(authResult.IdToken);
+                if (idToken.Payload is null)
+                {
+                    return;
+                }
+
                 var objectId = idToken.Payload.FirstOrDefault(x => x.Key == "sub");
-                if (!objectId.Equals(new KeyValuePair<string, object>()))
+                if (!objectId.Equals(new KeyValuePair<string, object>()) && objectId.Value is not null)
                 {
                     await _secureStorageService.SaveUserId(objectId.Value.ToString());
                     if (registerDevice)
@@ -585,7 +671,8 @@ namespace MauiApp2.Services
 
                 var givenName = idToken.Payload.FirstOrDefault(x => x.Key == "given_name");
                 var surName = idToken.Payload.FirstOrDefault(x => x.Key == "family_name");
-                if (!givenName.Equals(new KeyValuePair<string, object>()) && !surName.Equals(new KeyValuePair<string, object>()))
+                if (!givenName.Equals(new KeyValuePair<string, object>()) && !surName.Equals(new KeyValuePair<string, object>())
+                    && givenName.Value is not null && surName.Value is not null)
                 {
                     await _secureStorageService.SaveUserDisplayName((givenName.Value.ToString() + " " + surName.Value.ToString()).Trim());
                 }
@@ -599,6 +686,11 @@ namespace MauiApp2.Services
 
         private async Task SaveAuthenticationResultAsync(AuthenticationResult apimAuthResult)
         {
+            if (apimAuthResult is null)
+            {
+                return;
+            }
+
             await _secureStorageService.SaveAccessToken(apimAuthResult.AccessToken).ConfigureAwait(false);
             await _secureStorageService.SaveIdToken(apimAuthResult.IdToken).ConfigureAwait(false);
             await SaveUserDetailsAsync(apimAuthResult).ConfigureAwait(false);
